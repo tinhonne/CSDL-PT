@@ -1,0 +1,65 @@
+# Project Seach Sound Animal
+
+## Mô tả
+Hệ thống tìm kiếm tiếng động vật:  
+- Đầu vào: 1 file âm thanh `.wav` bất kỳ về một loài động vật.
+- Đầu ra: 3 file âm thanh giống nhất trong database, kèm % độ giống và khoảng cách.
+
+## Cấu trúc thư mục
+
+```
+audio_raw/           # Âm thanh gốc (phân theo loài)
+audio_processed/     # Âm thanh đã chuẩn hóa (wav, 22050Hz, mono)
+database/            # Chứa file animalsounds.db
+gui/                 # Giao diện Tkinter
+scripts/             # Script chuẩn hóa audio
+utils/               # Các hàm tiện ích: trích xuất đặc trưng, tìm kiếm, database
+requirements.txt     # Danh sách thư viện cần cài
+README.md            # File hướng dẫn này
+```
+
+## Cài đặt thư viện
+
+```bash
+pip install -r requirements.txt
+```
+
+**Nếu dùng pydub:**  
+- Cần cài ffmpeg cho hệ điều hành:
+    - Windows: tải tại [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html) và thêm vào PATH.
+
+## Hướng dẫn sử dụng
+
+### 1. Chuẩn hóa audio
+
+Chạy script để chuyển file âm thanh về chuẩn wav, mono, 22050Hz:
+
+```bash
+python -m scripts.normalize_audio
+```
+
+### 2. Tạo database và trích xuất đặc trưng
+
+Chạy script tạo database và insert đặc trưng (nếu có):
+
+```bash
+python -m utils.db_utils
+```
+
+### 3. Chạy giao diện tìm kiếm
+
+```bash
+python -m gui.main_gui_tk
+```
+
+- Chọn file `.wav` để tìm kiếm.
+- Xem top 3 kết quả giống nhất, có thể nghe thử từng file.
+
+## Ghi chú
+
+- Nếu gặp lỗi khi phát âm thanh, hãy kiểm tra lại định dạng file wav và cài đặt pygame.
+- Nếu gặp lỗi thiếu thư viện, hãy kiểm tra lại `requirements.txt` và cài đặt đúng môi trường Python.
+
+---
+
+**Chúc bạn thành công!**
