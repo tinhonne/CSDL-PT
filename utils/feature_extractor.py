@@ -1,42 +1,67 @@
+import wave
+import struct
+import math
 import numpy as np
-from scipy.io import wavfile
+from numpy.fft import rfft, rfftfreq
 import librosa
 
+# Đọc WAV file (chuẩn hóa về mono và [-1, 1])
+def read_wav_file(filepath):
+    with wave.open(filepath, 'rb') as wf:
+        num_channels = wf.getnchannels()
+        sample_width = wf.getsampwidth()
+        framerate = wf.getframerate()
+        num_frames = wf.getnframes()
+        raw_data = wf.readframes(num_frames)
+        samples = struct.unpack('<' + 'h' * (len(raw_data) // 2), raw_data)
+        if num_channels == 2:
+            samples = [(samples[i] + samples[i+1]) / 2 for i in range(0, len(samples), 2)]
+        return [s / 32768.0 for s in samples], framerate  # Chuẩn hóa về [-1, 1]
+
+# Hàm tính đặc trưng âm thanh
 def extract_features(filepath):
-    print("Đang tải file:", filepath)
-    try:
-        sr, y = wavfile.read(filepath)
-        y = y.astype(np.float32)
-        if y.ndim > 1:
-            y = y.mean(axis=1)  # chuyển về mono nếu là stereo
-    except Exception as e:
-        print("❌ Lỗi khi tải file âm thanh:", e)
-        raise
+    y, sr = read_wav_file(filepath)
+    N = len(y)
 
-    # Chuẩn hóa tín hiệu về [-1, 1] để các đặc trưng đều là số thực nhỏ
-    y = y / (np.max(np.abs(y)) + 1e-10)
+    # Zero Crossing Rate (ZCR)
+    signs = [1 if s >= 0 else -1 for s in y]
+    zero_crossings = sum(1 for i in range(1, N) if signs[i] != signs[i - 1])
+    zcr = zero_crossings / (2 * N)
 
-    # ZCR (Zero Crossing Rate)
-    zcr = float(np.mean(np.abs(np.diff(np.sign(y)))) / 2)
+    # Root Mean Square (RMS)
+    rms = math.sqrt(sum(s * s for s in y) / N)
 
-    # RMS (Root Mean Square)
-    rms = float(np.sqrt(np.mean(y ** 2)))
+    # FFT 
+    spectrum_cpx = rfft(y)
+    spectrum = [abs(x) for x in spectrum_cpx]
+    total_spectrum = sum(spectrum) + 1e-10 
 
-    # Centroid (Spectral Centroid)
-    spectrum = np.abs(np.fft.rfft(y))
-    freqs = np.fft.rfftfreq(len(y), d=1/sr)
-    centroid = float(np.sum(freqs * spectrum) / (np.sum(spectrum) + 1e-10))
+    # Tần số tương ứng
+    freqs = rfftfreq(N, d=1/sr)
 
-    # Bandwidth (Spectral Bandwidth)
-    bandwidth = float(np.sqrt(np.sum(((freqs - centroid) ** 2) * spectrum) / (np.sum(spectrum) + 1e-10)))
+    # Spectral Centroid
+    centroid = sum(f * s for f, s in zip(freqs, spectrum)) / total_spectrum
 
-    # Rolloff (Spectral Rolloff, 85%)
-    cumulative = np.cumsum(spectrum)
-    rolloff_threshold = 0.85 * cumulative[-1]
-    rolloff = float(freqs[np.where(cumulative >= rolloff_threshold)[0][0]])
+    # Spectral Bandwidth
+    bandwidth = math.sqrt(sum(((f - centroid) ** 2) * s for f, s in zip(freqs, spectrum)) / total_spectrum)
 
-    # MFCC dùng librosa
-    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
-    mfcc_mean = [float(x) for x in np.mean(mfcc, axis=1)]
+    # Spectral Rolloff (85%)
+    cumulative = []
+    acc = 0
+    for s in spectrum:
+        acc += s
+        cumulative.append(acc)
+    rolloff_threshold = 0.85 * acc
+    rolloff = 0
+    for i, v in enumerate(cumulative):
+        if v >= rolloff_threshold:
+            rolloff = freqs[i]
+            break
 
+    # MFCC
+    y_np = np.array(y, dtype=np.float32)
+    mfcc = librosa.feature.mfcc(y=y_np, sr=sr, n_mfcc=20)
+    mfcc_mean = [float(sum(row) / len(row)) for row in mfcc]
+
+    # Trả về danh sách đặc trưng
     return [zcr, rms, centroid, bandwidth, rolloff] + mfcc_mean
